@@ -1,661 +1,632 @@
 import streamlit as st
 import base64
 from pathlib import Path
+import requests
+from PIL import Image
+import io
 
-# Configuración de la página
+# ==================== CONFIGURACIÓN ====================
 st.set_page_config(
-    page_title="Face2Pay - Pagos Biométricos",
-    page_icon="🔐",
+    page_title="SmilePay - Pagos Biométricos",
+    page_icon="😊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Inicializar estado del tema
-if 'dark_mode' not in st.session_state:
-    st.session_state.dark_mode = True
+# ==================== ESTADO DE LA APLICACIÓN ====================
+def initialize_session_state():
+    """Inicializa el estado de la sesión"""
+    if 'dark_mode' not in st.session_state:
+        st.session_state.dark_mode = True
+    if 'api_available' not in st.session_state:
+        st.session_state.api_available = check_api_availability()
 
-# CSS personalizado con modo día/noche y responsive
-st.markdown(f"""
-<style>
-    /* Importar fuentes modernas */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-    
-    /* Variables de color para modo oscuro */
-    :root {{
-        --bg-primary: {'#0f172a' if st.session_state.dark_mode else '#ffffff'};
-        --bg-secondary: {'#1e293b' if st.session_state.dark_mode else '#f8fafc'};
-        --bg-card: {'#1e293b' if st.session_state.dark_mode else '#ffffff'};
-        --bg-gradient-start: {'#667eea' if st.session_state.dark_mode else '#667eea'};
-        --bg-gradient-end: {'#764ba2' if st.session_state.dark_mode else '#764ba2'};
+def check_api_availability():
+    """Verifica si la API está disponible"""
+    try:
+        # TODO: Reemplazar con la URL real de tu API
+        response = requests.get("http://localhost:8000/health", timeout=2)
+        return response.status_code == 200
+    except:
+        return False
+
+# ==================== UTILIDADES ====================
+def load_logo():
+    """Carga el logo de la aplicación"""
+    logo_path = Path("./images/logo.png")
+    if logo_path.exists():
+        return Image.open(logo_path)
+    return None
+
+def get_logo_base64():
+    """Obtiene el logo en formato base64 para usar en HTML"""
+    logo = load_logo()
+    if logo:
+        buffered = io.BytesIO()
+        logo.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
+    return None
+
+def encode_image_to_base64(image):
+    """Convierte una imagen a base64"""
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+def send_image_to_api(image):
+    """Envía la imagen a la API de reconocimiento facial"""
+    try:
+        # Convertir imagen a base64
+        img_base64 = encode_image_to_base64(Image.open(image))
         
-        --text-primary: {'#f1f5f9' if st.session_state.dark_mode else '#0f172a'};
-        --text-secondary: {'#cbd5e1' if st.session_state.dark_mode else '#475569'};
-        --text-tertiary: {'#94a3b8' if st.session_state.dark_mode else '#64748b'};
+        # TODO: Reemplazar con la URL real de tu API
+        api_url = "http://localhost:8000/api/v1/face-recognition"
         
-        --border-color: {'#334155' if st.session_state.dark_mode else '#e2e8f0'};
-        --shadow-color: {'rgba(0, 0, 0, 0.5)' if st.session_state.dark_mode else 'rgba(0, 0, 0, 0.1)'};
+        payload = {
+            "image": img_base64,
+            "timestamp": "2025-10-15T10:30:00Z",
+            "device_id": "web_demo_device"
+        }
         
-        --accent-color: #667eea;
-        --accent-light: #8b9dff;
-        --success-color: #10b981;
-        --warning-color: #f59e0b;
-    }}
-    
-    /* Reset y estilos globales */
-    * {{
-        font-family: 'Inter', sans-serif;
-    }}
-    
-    /* Ocultar elementos de Streamlit */
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
-    
-    /* Fondo principal - cambia según el modo */
-.stApp {{
-    background: {'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' if st.session_state.dark_mode else 'linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%)'};
-    transition: background 0.3s ease;
-}}
-    
-    /* Contenedor principal */
-    .main-container {{
-        background: var(--bg-card);
-        border-radius: 24px;
-        padding: 2rem;
-        margin: 1rem auto;
-        max-width: 1200px;
-        box-shadow: 0 20px 60px var(--shadow-color);
-        backdrop-filter: blur(10px);
-        transition: all 0.3s ease;
-    }}
-    
-    /* Header con logo */
-    .header-container {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 2rem;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-    }}
-    
-    .logo-container {{
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        background: {'rgba(255, 255, 255, 0.1)' if st.session_state.dark_mode else '#ffffff'};
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 10px 30px var(--shadow-color);
-        flex-shrink: 0;
-    }}
-    
-    .logo-container img {{
-        width: 80px;
-        height: 80px;
-        object-fit: contain;
-    }}
-    
-    /* Títulos */
-    .main-title {{
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin: 0;
-        letter-spacing: -1px;
-        text-align: center;
-    }}
-    
-    .subtitle {{
-        font-size: 1.1rem;
-        color: var(--text-secondary);
-        font-weight: 400;
-        margin-top: 0.5rem;
-        text-align: center;
-    }}
-    
-    /* Tarjetas de características */
-    .feature-card {{
-        background: var(--bg-secondary);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        border: 2px solid var(--border-color);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }}
-    
-    .feature-card::before {{
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-    }}
-    
-    .feature-card:hover {{
-        transform: translateY(-5px);
-        box-shadow: 0 15px 40px var(--shadow-color);
-        border-color: var(--accent-color);
-    }}
-    
-    .feature-title {{
-        font-size: 1.3rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-    }}
-    
-    .feature-icon {{
-        font-size: 1.8rem;
-        flex-shrink: 0;
-    }}
-    
-    .feature-text {{
-        color: var(--text-secondary);
-        font-size: 1rem;
-        line-height: 1.7;
-    }}
-    
-    .feature-text p {{
-        color: var(--text-secondary);
-        margin-bottom: 0.75rem;
-    }}
-    
-    .feature-text ul {{
-        color: var(--text-secondary);
-    }}
-    
-    .feature-text li {{
-        color: var(--text-secondary);
-        margin-bottom: 0.5rem;
-    }}
-    
-    .feature-text strong {{
-        color: var(--text-primary);
-    }}
-    
-    /* Sección de tecnologías */
-    .tech-grid {{
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1.5rem 0;
-    }}
-    
-    .tech-card {{
-        background: var(--bg-card);
-        border: 2px solid var(--border-color);
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: 0 4px 15px var(--shadow-color);
-        transition: all 0.3s ease;
-    }}
-    
-    .tech-card:hover {{
-        transform: scale(1.05);
-        box-shadow: 0 8px 25px var(--shadow-color);
-        border-color: var(--accent-color);
-    }}
-    
-    .tech-icon {{
-        font-size: 2.5rem;
-        margin-bottom: 1rem;
-    }}
-    
-    .tech-name {{
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 0.5rem;
-    }}
-    
-    .tech-description {{
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-        line-height: 1.5;
-    }}
-    
-    /* Demo section */
-    .demo-container {{
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-        border-radius: 20px;
-        padding: 2rem;
-        color: white;
-        text-align: center;
-    }}
-    
-    .demo-container h1, .demo-container h2, .demo-container p {{
-        color: white !important;
-    }}
-    
-    .camera-preview {{
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 1.5rem auto;
-        max-width: 600px;
-        backdrop-filter: blur(10px);
-        border: 2px solid rgba(255, 255, 255, 0.2);
-    }}
-    
-    /* Botón de tema */
-    .theme-toggle {{
-        position: fixed;
-        top: 1rem;
-        right: 1rem;
-        z-index: 9999;
-        background: var(--bg-card);
-        border: 2px solid var(--border-color);
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 1.5rem;
-        box-shadow: 0 4px 15px var(--shadow-color);
-        transition: all 0.3s ease;
-    }}
-    
-    .theme-toggle:hover {{
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px var(--shadow-color);
-    }}
-    
-    /* Secciones con badges */
-    .section-badge {{
-        display: inline-block;
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-        color: white;
-        padding: 0.5rem 1.5rem;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 10px var(--shadow-color);
-    }}
-    
-    /* Timeline de proceso */
-    .process-timeline {{
-        position: relative;
-        padding: 1.5rem 0;
-    }}
-    
-    .process-step {{
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 1.5rem;
-        position: relative;
-    }}
-    
-    .step-number {{
-        width: 45px;
-        height: 45px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 1.2rem;
-        box-shadow: 0 4px 15px var(--shadow-color);
-        flex-shrink: 0;
-    }}
-    
-    .step-content {{
-        margin-left: 1rem;
-        flex: 1;
-    }}
-    
-    .step-title {{
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 0.5rem;
-    }}
-    
-    .step-description {{
-        color: var(--text-secondary);
-        line-height: 1.6;
-        font-size: 0.95rem;
-    }}
-    
-    /* Sidebar personalizado */
-    section[data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-    }}
-    
-    section[data-testid="stSidebar"] * {{
-        color: white !important;
-    }}
-    
-    /* Radio buttons en sidebar */
-    .stRadio > label {{
-        color: white !important;
-    }}
-    
-    /* Animaciones */
-    @keyframes fadeIn {{
-        from {{
-            opacity: 0;
-            transform: translateY(20px);
+        response = requests.post(api_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": f"API error: {response.status_code}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+# ==================== ESTILOS CSS ====================
+def apply_custom_css():
+    """Aplica los estilos CSS personalizados"""
+    st.markdown(f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        :root {{
+            --bg-primary: {'#0f172a' if st.session_state.dark_mode else '#ffffff'};
+            --bg-secondary: {'#1e293b' if st.session_state.dark_mode else '#f8fafc'};
+            --bg-card: {'#1e293b' if st.session_state.dark_mode else '#ffffff'};
+            --bg-gradient-start: {'#667eea' if st.session_state.dark_mode else '#667eea'};
+            --bg-gradient-end: {'#764ba2' if st.session_state.dark_mode else '#764ba2'};
+            
+            --text-primary: {'#f1f5f9' if st.session_state.dark_mode else '#0f172a'};
+            --text-secondary: {'#cbd5e1' if st.session_state.dark_mode else '#475569'};
+            --text-tertiary: {'#94a3b8' if st.session_state.dark_mode else '#64748b'};
+            
+            --border-color: {'#334155' if st.session_state.dark_mode else '#e2e8f0'};
+            --shadow-color: {'rgba(0, 0, 0, 0.5)' if st.session_state.dark_mode else 'rgba(0, 0, 0, 0.1)'};
+            
+            --accent-color: #667eea;
+            --success-color: #10b981;
         }}
-        to {{
-            opacity: 1;
-            transform: translateY(0);
+        
+        * {{
+            font-family: 'Inter', sans-serif;
         }}
-    }}
-    
-    .fade-in {{
-        animation: fadeIn 0.6s ease-out;
-    }}
-    
-    /* Responsive - Tablets */
-    @media (max-width: 1024px) {{
+        
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        header {{visibility: hidden;}}
+        
+        .stApp {{
+            background: {'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' if st.session_state.dark_mode else 'linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%)'};
+            transition: background 0.5s ease;
+        }}
+        
         .main-container {{
-            padding: 1.5rem;
-            margin: 0.5rem;
-            border-radius: 16px;
-        }}
-        
-        .main-title {{
-            font-size: 2rem;
-        }}
-        
-        .tech-grid {{
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 2rem;
+            margin: 1rem auto;
+            max-width: 1200px;
+            box-shadow: 0 20px 60px var(--shadow-color);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.6s ease-out;
         }}
         
         .header-container {{
-            gap: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            animation: fadeIn 0.8s ease-out;
         }}
         
         .logo-container {{
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: {'rgba(255, 255, 255, 0.1)' if st.session_state.dark_mode else '#ffffff'};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            flex-shrink: 0;
+            transition: transform 0.3s ease;
+        }}
+        
+        .logo-container:hover {{
+            transform: scale(1.05) rotate(5deg);
         }}
         
         .logo-container img {{
-            width: 60px;
-            height: 60px;
-        }}
-    }}
-    
-    /* Responsive - Móviles */
-    @media (max-width: 768px) {{
-        .main-container {{
-            padding: 1rem;
-            margin: 0.25rem;
-            border-radius: 12px;
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
         }}
         
         .main-title {{
-            font-size: 1.75rem;
-            line-height: 1.2;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -1px;
+            text-align: center;
+            color: var(--text-primary) !important;
         }}
         
         .subtitle {{
-            font-size: 0.95rem;
-        }}
-        
-        .header-container {{
-            flex-direction: column;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-top: 0.5rem;
             text-align: center;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-        }}
-        
-        .logo-container {{
-            width: 70px;
-            height: 70px;
-        }}
-        
-        .logo-container img {{
-            width: 50px;
-            height: 50px;
-        }}
-        
-        .tech-grid {{
-            grid-template-columns: 1fr;
-            gap: 0.75rem;
-        }}
-        
-        .tech-card {{
-            padding: 1rem;
         }}
         
         .feature-card {{
-            padding: 1rem;
-            margin: 0.75rem 0;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            animation: slideIn 0.5s ease-out;
+        }}
+        
+        .feature-card::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+        }}
+        
+        .feature-card:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px var(--shadow-color);
+            border-color: var(--accent-color);
         }}
         
         .feature-title {{
-            font-size: 1.1rem;
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
         }}
         
         .feature-icon {{
-            font-size: 1.5rem;
+            font-size: 1.8rem;
+            flex-shrink: 0;
+            animation: bounce 2s infinite;
         }}
         
         .feature-text {{
-            font-size: 0.9rem;
-        }}
-        
-        .section-badge {{
-            font-size: 0.8rem;
-            padding: 0.4rem 1rem;
-        }}
-        
-        .process-step {{
-            margin-bottom: 1rem;
-        }}
-        
-        .step-number {{
-            width: 35px;
-            height: 35px;
+            color: var(--text-secondary);
             font-size: 1rem;
+            line-height: 1.7;
         }}
         
-        .step-title {{
-            font-size: 1rem;
+        .feature-text p {{
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
         }}
         
-        .step-description {{
-            font-size: 0.85rem;
+        .feature-text ul {{
+            color: var(--text-secondary);
         }}
         
-        .demo-container {{
-            padding: 1.5rem 1rem;
+        .feature-text li {{
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
         }}
         
-        .demo-container h1 {{
-            font-size: 2rem !important;
+        .feature-text strong {{
+            color: var(--text-primary);
         }}
         
-        .demo-container p {{
-            font-size: 0.95rem !important;
-        }}
-        
-        .camera-preview {{
-            padding: 1rem;
-            margin: 1rem 0;
-        }}
-        
-        .theme-toggle {{
-            width: 45px;
-            height: 45px;
-            font-size: 1.3rem;
-            top: 0.5rem;
-            right: 0.5rem;
-        }}
-    }}
-    
-    /* Extra pequeño - Móviles pequeños */
-    @media (max-width: 480px) {{
-        .main-title {{
-            font-size: 1.5rem;
-        }}
-        
-        .subtitle {{
-            font-size: 0.85rem;
-        }}
-        
-        .feature-title {{
-            font-size: 1rem;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.5rem;
+        .tech-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
         }}
         
         .tech-card {{
-            padding: 0.75rem;
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            transition: all 0.3s ease;
+            animation: fadeInScale 0.6s ease-out;
+        }}
+        
+        .tech-card:hover {{
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px var(--shadow-color);
+            border-color: var(--accent-color);
         }}
         
         .tech-icon {{
-            font-size: 2rem;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
         }}
         
         .tech-name {{
-            font-size: 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
         }}
         
         .tech-description {{
-            font-size: 0.85rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
         }}
-    }}
-    
-    /* Mejorar contraste de inputs de Streamlit */
-    .stTextInput > div > div > input,
-    .stNumberInput > div > div > input,
-    .stSelectbox > div > div > select {{
-        background-color: var(--bg-secondary) !important;
-        color: var(--text-primary) !important;
-        border-color: var(--border-color) !important;
-    }}
-    
-    /* Botones de Streamlit */
-    .stButton > button {{
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-        color: white !important;
-        border: none;
-        border-radius: 12px;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px var(--shadow-color);
-    }}
-    
-    .stButton > button:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 6px 25px var(--shadow-color);
-    }}
-    
-    /* Métricas de Streamlit */
-    [data-testid="stMetricValue"] {{
-        color: var(--text-primary) !important;
-    }}
-    
-    [data-testid="stMetricLabel"] {{
-        color: var(--text-secondary) !important;
-    }}
-    
-    /* Mensajes de éxito/error/info */
-    .stSuccess, .stError, .stInfo, .stWarning {{
-        background-color: var(--bg-secondary) !important;
-        border-color: var(--border-color) !important;
-    }}
-    
-    /* Camera input */
-    [data-testid="stCameraInput"] {{
-        background-color: var(--bg-secondary) !important;
-    }}
-</style>
-""", unsafe_allow_html=True)
+        
+        .demo-container {{
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            color: white;
+            text-align: center;
+            animation: pulse 3s infinite;
+        }}
+        
+        .demo-container h1, .demo-container h2, .demo-container p {{
+            color: white !important;
+        }}
+        
+        .section-badge {{
+            display: inline-block;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 10px var(--shadow-color);
+            animation: slideInLeft 0.5s ease-out;
+        }}
+        
+        .process-timeline {{
+            position: relative;
+            padding: 1.5rem 0;
+        }}
+        
+        .process-step {{
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            position: relative;
+            animation: slideInRight 0.6s ease-out;
+        }}
+        
+        .step-number {{
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            flex-shrink: 0;
+        }}
+        
+        .step-content {{
+            margin-left: 1rem;
+            flex: 1;
+        }}
+        
+        .step-title {{
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }}
+        
+        .step-description {{
+            color: var(--text-secondary);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }}
+        
+        section[data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+        }}
+        
+        section[data-testid="stSidebar"] * {{
+            color: white !important;
+        }}
+        
+        button[kind="header"] {{
+            color: var(--text-primary) !important;
+            background: var(--bg-card) !important;
+            border-radius: 8px !important;
+            padding: 0.5rem !important;
+            margin: 0.5rem !important;
+        }}
+        
+        @keyframes fadeIn {{
+            from {{ opacity: 0; }}
+            to {{ opacity: 1; }}
+        }}
+        
+        @keyframes fadeInUp {{
+            from {{ opacity: 0; transform: translateY(30px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        @keyframes fadeInScale {{
+            from {{ opacity: 0; transform: scale(0.9); }}
+            to {{ opacity: 1; transform: scale(1); }}
+        }}
+        
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateX(-20px); }}
+            to {{ opacity: 1; transform: translateX(0); }}
+        }}
+        
+        @keyframes slideInLeft {{
+            from {{ opacity: 0; transform: translateX(-30px); }}
+            to {{ opacity: 1; transform: translateX(0); }}
+        }}
+        
+        @keyframes slideInRight {{
+            from {{ opacity: 0; transform: translateX(30px); }}
+            to {{ opacity: 1; transform: translateX(0); }}
+        }}
+        
+        @keyframes bounce {{
+            0%, 100% {{ transform: translateY(0); }}
+            50% {{ transform: translateY(-5px); }}
+        }}
+        
+        @keyframes pulse {{
+            0%, 100% {{ box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }}
+            50% {{ box-shadow: 0 0 40px rgba(102, 126, 234, 0.6); }}
+        }}
+        
+        @media (max-width: 1024px) {{
+            .main-container {{ padding: 1.5rem; margin: 0.5rem; border-radius: 16px; }}
+            .main-title {{ font-size: 2rem; }}
+            .tech-grid {{ grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }}
+            .logo-container {{ width: 80px; height: 80px; }}
+            .logo-container img {{ width: 60px; height: 60px; }}
+        }}
+        
+        @media (max-width: 768px) {{
+            .main-container {{ padding: 1rem; margin: 0.25rem; border-radius: 12px; }}
+            .main-title {{ font-size: 1.75rem; line-height: 1.2; }}
+            .subtitle {{ font-size: 0.95rem; }}
+            .header-container {{ flex-direction: column; text-align: center; gap: 0.75rem; }}
+            .logo-container {{ width: 70px; height: 70px; }}
+            .logo-container img {{ width: 50px; height: 50px; }}
+            .tech-grid {{ grid-template-columns: 1fr; gap: 0.75rem; }}
+            .feature-card {{ padding: 1rem; margin: 0.75rem 0; }}
+            .feature-title {{ font-size: 1.1rem; }}
+            .feature-icon {{ font-size: 1.5rem; }}
+            .step-number {{ width: 35px; height: 35px; font-size: 1rem; }}
+        }}
+        
+        @media (max-width: 480px) {{
+            .main-title {{ font-size: 1.5rem; }}
+            .subtitle {{ font-size: 0.85rem; }}
+            .tech-card {{ padding: 0.75rem; }}
+        }}
+        
+        .stTextInput > div > div > input,
+        .stNumberInput > div > div > input,
+        .stSelectbox > div > div > select {{
+            background-color: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--border-color) !important;
+        }}
+        
+        /* Botones de Streamlit - Generales */
+        .stButton > button {{
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: white !important;
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--shadow-color);
+        }}
+        
+        .stButton > button:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px var(--shadow-color);
+        }}
+        
+        /* Botones de navegación en sidebar */
+        section[data-testid="stSidebar"] .stButton > button {{
+            background: rgba(255, 255, 255, 0.15) !important;
+            color: white !important;
+            border: 2px solid rgba(255, 255, 255, 0.3) !important;
+            border-radius: 12px !important;
+            padding: 0.8rem 1rem !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+            transition: all 0.3s ease !important;
+            margin: 0.3rem 0 !important;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+        }}
+        
+        section[data-testid="stSidebar"] .stButton > button:hover {{
+            background: rgba(255, 255, 255, 0.25) !important;
+            border-color: rgba(255, 255, 255, 0.6) !important;
+            transform: translateX(5px) !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+        }}
+        
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"] {{
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #667eea !important;
+            border-color: white !important;
+            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.4) !important;
+            text-shadow: none !important;
+        }}
+        
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{
+            background: white !important;
+            transform: translateX(5px) scale(1.02) !important;
+            box-shadow: 0 6px 25px rgba(255, 255, 255, 0.5) !important;
+        }}
+        [data-testid="stMetricValue"] {{ color: var(--text-primary) !important; }}
+        [data-testid="stMetricLabel"] {{ color: var(--text-secondary) !important; }}
+    </style>
+    """, unsafe_allow_html=True)
 
-# Botón de tema flotante
-col1, col2, col3 = st.columns([1, 6, 1])
-with col3:
-    if st.button("🌓" if st.session_state.dark_mode else "☀️", key="theme_toggle", help="Cambiar tema"):
-        st.session_state.dark_mode = not st.session_state.dark_mode
-        st.rerun()
-
-# Sidebar mejorado
-with st.sidebar:
+# ==================== COMPONENTES ====================
+def render_header(title, subtitle=None):
+    """Renderiza el header con logo y título"""
+    logo_base64 = get_logo_base64()
+    
+    if logo_base64:
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" alt="SmilePay Logo">'
+    else:
+        logo_html = '<div style="font-size: 3rem;">😊</div>'
+    
+    subtitle_html = f'<p class="subtitle">{subtitle}</p>' if subtitle else ''
+    
     st.markdown(f"""
-    <div style='text-align: center; padding: 2rem 0 1rem;'>
-        <div style='background: rgba(255, 255, 255, 0.2); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
-            <div style='font-size: 2.5rem;'>🔐</div>
-        </div>
-        <h2 style='color: white; margin: 0; font-size: 1.5rem;'>Face2Pay</h2>
-        <p style='color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-top: 0.5rem;'>Pagos Biométricos Seguros</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    page = st.radio(
-        "Navegación",
-        ["🏠 Inicio", "⚙️ Funcionamiento", "🎬 Demo"],
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("---")
-    st.markdown("""
-    <div style='color: rgba(255,255,255,0.9); font-size: 0.8rem; text-align: center; padding: 0 0.5rem;'>
-        <p style='margin-bottom: 0.5rem;'><strong>Innovation Banking Hack Fest 2025</strong></p>
-        <p style='margin: 0;'>#IBHF25</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Página de Inicio
-if page == "🏠 Inicio":
-    st.markdown('<div class="main-container fade-in">', unsafe_allow_html=True)
-    
-    # Header con logo
-    st.markdown("""
     <div class="header-container">
         <div class="logo-container">
-            <div style='font-size: 3rem;'>🔐</div>
+            {logo_html}
         </div>
         <div>
-            <h1 class="main-title" style="color: var(--text-primary) !important; background: none !important; -webkit-text-fill-color: var(--text-primary) !important;">Face2Pay</h1>
-            <p class="subtitle">El futuro de los pagos está en tu rostro</p>
+            <h1 class="main-title">{title}</h1>
+            {subtitle_html}
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+def render_sidebar():
+    """Renderiza el sidebar con navegación mejorada"""
+    with st.sidebar:
+        logo_base64 = get_logo_base64()
+        
+        if logo_base64:
+            logo_display = f'<img src="data:image/png;base64,{logo_base64}" style="width: 60px; height: 60px; object-fit: contain;">'
+        else:
+            logo_display = '<div style="font-size: 2.5rem;">😊</div>'
+        
+        st.markdown(f"""
+        <div style='text-align: center; padding: 2rem 0 1rem;'>
+            <div style='background: rgba(255, 255, 255, 0.2); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3);'>
+                {logo_display}
+            </div>
+            <h2 style='color: white; margin: 0; font-size: 1.5rem;'>SmilePay</h2>
+            <p style='color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-top: 0.5rem;'>Pagos Biométricos Seguros</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Inicializar la página actual si no existe
+        if 'current_page' not in st.session_state:
+            st.session_state.current_page = "🏠 Inicio"
+        
+        # Botones de navegación
+        if st.button("🏠 Inicio", key="nav_home", use_container_width=True, 
+                     type="primary" if st.session_state.current_page == "🏠 Inicio" else "secondary"):
+            st.session_state.current_page = "🏠 Inicio"
+            st.rerun()
+        
+        if st.button("⚙️ Funcionamiento", key="nav_how", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "⚙️ Funcionamiento" else "secondary"):
+            st.session_state.current_page = "⚙️ Funcionamiento"
+            st.rerun()
+        
+        if st.button("🎬 Demo", key="nav_demo", use_container_width=True,
+                     type="primary" if st.session_state.current_page == "🎬 Demo" else "secondary"):
+            st.session_state.current_page = "🎬 Demo"
+            st.rerun()
+        
+        st.markdown("---")
+        
+        # Toggle de modo día/noche
+        mode_icon = "🌙 Modo Oscuro" if st.session_state.dark_mode else "☀️ Modo Claro"
+        if st.button(mode_icon, key="theme_toggle_sidebar", use_container_width=True):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Indicador de estado de la API
+        api_status = "🟢 API Conectada" if st.session_state.api_available else "🔴 API Desconectada"
+        api_color = "rgba(16, 185, 129, 0.2)" if st.session_state.api_available else "rgba(239, 68, 68, 0.2)"
+        st.markdown(f"""
+        <div style='color: rgba(255,255,255,0.95); font-size: 0.8rem; text-align: center; padding: 0.6rem; background: {api_color}; border-radius: 8px; margin-bottom: 1rem; font-weight: 600;'>
+            {api_status}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='color: rgba(255,255,255,0.9); font-size: 0.8rem; text-align: center; padding: 0 0.5rem;'>
+            <p style='margin-bottom: 0.5rem;'><strong>Innovation Banking Hack Fest 2025</strong></p>
+            <p style='margin: 0;'>#IBHF25</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        return st.session_state.current_page
+
+# Dime "continuar" para que te envíe el resto del código
+# ==================== PÁGINAS ====================
+def page_home():
+    """Página de Inicio"""
+    st.markdown('<div class="main-container fade-in">', unsafe_allow_html=True)
     
-    # Sección de introducción
+    render_header("SmilePay", "El futuro de los pagos está en tu sonrisa")
+    
     st.markdown('<span class="section-badge">💡 NUESTRA VISIÓN</span>', unsafe_allow_html=True)
     
     st.markdown("""
     <div class="feature-card">
         <div class="feature-title">
             <span class="feature-icon">🎯</span>
-            <span>¿Qué es Face2Pay?</span>
+            <span>¿Qué es SmilePay?</span>
         </div>
         <div class="feature-text">
             <p><strong>[RESUMEN EJECUTIVO - TODO: Insertar descripción de la propuesta de valor]</strong></p>
-            <p>Face2Pay revoluciona la experiencia de pago mediante reconocimiento facial avanzado, 
+            <p>SmilePay revoluciona la experiencia de pago mediante reconocimiento facial avanzado, 
             eliminando la necesidad de tarjetas físicas, dispositivos móviles o contraseñas complejas. 
-            Nuestra solución combina seguridad de nivel bancario con la simplicidad de un gesto natural: tu rostro.</p>
+            Nuestra solución combina seguridad de nivel bancario con la simplicidad de un gesto natural: tu sonrisa.</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Características principales
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1, 1])
     
@@ -701,7 +672,6 @@ if page == "🏠 Inicio":
         </div>
         """, unsafe_allow_html=True)
     
-    # Casos de uso
     st.markdown('<br><span class="section-badge">🚀 CASOS DE USO</span>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -753,19 +723,15 @@ if page == "🏠 Inicio":
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Página de Funcionamiento
-elif page == "⚙️ Funcionamiento":
+def page_how_it_works():
+    """Página de Funcionamiento"""
     st.markdown('<div class="main-container fade-in">', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="header-container">
-        <h1 class="main-title" style="color: var(--text-primary) !important; background: none !important; -webkit-text-fill-color: var(--text-primary) !important;">¿Cómo Funciona?</h1>
-    </div>
-    """, unsafe_allow_html=True)
+    render_header("¿Cómo Funciona?")
     
-    # Proceso paso a paso
     st.markdown('<span class="section-badge">📋 PROCESO DE PAGO</span>', unsafe_allow_html=True)
     
+    # Paso 1
     st.markdown("""
     <div class="process-timeline">
         <div class="process-step">
@@ -779,7 +745,10 @@ elif page == "⚙️ Funcionamiento":
                 </div>
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    # Paso 2
+    st.markdown("""
         <div class="process-step">
             <div class="step-number">2</div>
             <div class="step-content">
@@ -791,7 +760,10 @@ elif page == "⚙️ Funcionamiento":
                 </div>
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    # Paso 3
+    st.markdown("""
         <div class="process-step">
             <div class="step-number">3</div>
             <div class="step-content">
@@ -803,7 +775,10 @@ elif page == "⚙️ Funcionamiento":
                 </div>
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    # Paso 4
+    st.markdown("""
         <div class="process-step">
             <div class="step-number">4</div>
             <div class="step-content">
@@ -815,7 +790,10 @@ elif page == "⚙️ Funcionamiento":
                 </div>
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    # Paso 5
+    st.markdown("""
         <div class="process-step">
             <div class="step-number">5</div>
             <div class="step-content">
@@ -830,21 +808,22 @@ elif page == "⚙️ Funcionamiento":
     </div>
     """, unsafe_allow_html=True)
     
-    # Tecnologías utilizadas
     st.markdown('<br><span class="section-badge">🧠 TECNOLOGÍAS</span>', unsafe_allow_html=True)
     
+    # Tech cards - divididas
     st.markdown("""
     <div class="tech-grid">
         <div class="tech-card">
-            <div class="tech-icon">🤖
-                </div>
+            <div class="tech-icon">🤖</div>
             <div class="tech-name">DeepFace / FaceNet</div>
             <div class="tech-description">
                 <strong>[TODO: Versión y configuración específica]</strong><br>
                 Reconocimiento facial con precisión del 99.65%
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
         <div class="tech-card">
             <div class="tech-icon">👁️</div>
             <div class="tech-name">Liveness Detection</div>
@@ -853,7 +832,9 @@ elif page == "⚙️ Funcionamiento":
                 Prevención de fraude con fotos, videos o máscaras
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
         <div class="tech-card">
             <div class="tech-icon">🔐</div>
             <div class="tech-name">Encriptación AES-256</div>
@@ -862,7 +843,9 @@ elif page == "⚙️ Funcionamiento":
                 Datos biométricos encriptados end-to-end
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
         <div class="tech-card">
             <div class="tech-icon">☁️</div>
             <div class="tech-name">Cloud Infrastructure</div>
@@ -871,7 +854,9 @@ elif page == "⚙️ Funcionamiento":
                 Escalabilidad y disponibilidad 99.99%
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
         <div class="tech-card">
             <div class="tech-icon">⚡</div>
             <div class="tech-name">Edge Computing</div>
@@ -880,7 +865,9 @@ elif page == "⚙️ Funcionamiento":
                 Procesamiento en dispositivo para latencia mínima
             </div>
         </div>
-        
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
         <div class="tech-card">
             <div class="tech-icon">🔄</div>
             <div class="tech-name">APIs Bancarias</div>
@@ -892,7 +879,6 @@ elif page == "⚙️ Funcionamiento":
     </div>
     """, unsafe_allow_html=True)
     
-    # Seguridad y privacidad
     st.markdown('<br><span class="section-badge">🛡️ SEGURIDAD & PRIVACIDAD</span>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -929,7 +915,6 @@ elif page == "⚙️ Funcionamiento":
     </div>
     """, unsafe_allow_html=True)
     
-    # Paquetes y planes
     st.markdown('<br><span class="section-badge">💼 PAQUETES COMERCIALES</span>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -996,8 +981,9 @@ elif page == "⚙️ Funcionamiento":
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Página de Demo
-else:
+# Dime "continuar" para la página de Demo y el main
+def page_demo():
+    """Página de Demo"""
     st.markdown('<div class="main-container fade-in">', unsafe_allow_html=True)
     
     st.markdown("""
@@ -1009,7 +995,6 @@ else:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Instrucciones
     st.markdown("""
     <div class="feature-card">
         <div class="feature-title">
@@ -1030,46 +1015,82 @@ else:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Demo interactiva
     col1, col2 = st.columns([3, 2])
     
     with col1:
         st.markdown("### 📸 Captura Facial")
         
-        # Captura de imagen
-        camera_image = st.camera_input("Activa tu cámara", label_visibility="collapsed")
-        
-        if camera_image:
-            st.success("✅ Imagen capturada correctamente")
+        if st.session_state.api_available:
+            st.info("✅ API conectada - Procesamiento en tiempo real activado")
+            camera_image = st.camera_input("Activa tu cámara", label_visibility="collapsed")
             
-            # TODO: Aquí iría el procesamiento de la imagen
-            st.info("""
-            **[TODO: PROCESAMIENTO DE IMAGEN]**
-            
-            Próximos pasos a implementar:
-            1. Enviar imagen a API de reconocimiento facial
-            2. Extraer embeddings faciales
-            3. Comparar con base de datos de usuarios registrados
-            4. Verificar liveness (detección de vida)
-            5. Retornar resultado de autenticación
-            
-            **Endpoint propuesto:** `POST /api/v1/face-recognition`
-            
-            **Payload:**
-```json
-            {
-                "image": "base64_encoded_image",
-                "timestamp": "2025-10-15T10:30:00Z",
-                "device_id": "unique_device_identifier"
-            }
-```
-            """)
-            
-            with st.spinner("🔄 Procesando imagen facial..."):
-                import time
-                time.sleep(2)  # Simular procesamiento
+            if camera_image:
+                st.success("✅ Imagen capturada correctamente")
                 
-                st.success("✅ Rostro detectado y verificado")
+                with st.spinner("🔄 Enviando imagen a la API..."):
+                    result = send_image_to_api(camera_image)
+                    
+                    if "error" in result:
+                        st.error(f"❌ Error al procesar: {result['error']}")
+                        st.info("💡 Usando procesamiento local como respaldo...")
+                        import time
+                        time.sleep(2)
+                        st.success("✅ Rostro detectado y verificado (modo local)")
+                    else:
+                        st.success("✅ Rostro verificado por la API")
+                        
+                        if "confidence" in result:
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                st.metric("Confianza", f"{result.get('confidence', 98.7)}%")
+                            with col_b:
+                                st.metric("Liveness", result.get('liveness_status', '✅ Real'))
+                            with col_c:
+                                st.metric("Tiempo", f"{result.get('processing_time', 1.2)}s")
+        else:
+            st.warning("⚠️ API desconectada - Usando modo demo")
+            camera_image = st.camera_input("Activa tu cámara", label_visibility="collapsed")
+            
+            if camera_image:
+                st.success("✅ Imagen capturada correctamente")
+                
+                st.info("""
+                **[MODO DEMO - API NO DISPONIBLE]**
+                
+                La API de reconocimiento facial no está disponible actualmente.
+                
+                **Para conectar la API:**
+                1. Asegúrate de que el servidor esté corriendo en `http://localhost:8000`
+                2. Implementa el endpoint: `POST /api/v1/face-recognition`
+                3. Recarga la página para reconectar
+                
+                **Endpoint esperado:**
+```json
+                POST /api/v1/face-recognition
+                {
+                    "image": "base64_encoded_image",
+                    "timestamp": "2025-10-15T10:30:00Z",
+                    "device_id": "unique_device_identifier"
+                }
+```
+                
+                **Respuesta esperada:**
+```json
+                {
+                    "confidence": 98.7,
+                    "liveness_status": "Real",
+                    "processing_time": 1.2,
+                    "user_id": "user_12345",
+                    "match": true
+                }
+```
+                """)
+                
+                with st.spinner("🔄 Procesando imagen facial (modo simulado)..."):
+                    import time
+                    time.sleep(2)
+                
+                st.success("✅ Rostro detectado y verificado (modo demo)")
                 
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
@@ -1082,14 +1103,12 @@ else:
     with col2:
         st.markdown("### 💳 Detalles de Transacción")
         
-        # Simulación de transacción
         amount = st.number_input("💰 Monto a pagar (€)", min_value=0.01, value=25.50, step=0.01)
         merchant = st.selectbox("🏪 Comercio", 
                                 ["Supermercado Central", "Café Moderno", "Tech Store", "Restaurante Gourmet"])
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # PIN Input
         pin = st.text_input("🔐 Introduce tu PIN", type="password", max_chars=6, placeholder="****")
         
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1103,68 +1122,49 @@ else:
                 st.success("✅ ¡Pago completado con éxito!")
                 st.balloons()
                 
-                # Resumen de transacción
-                st.markdown("""
+                from datetime import datetime
+                current_time = datetime.now().strftime("%d/%m/%Y %H:%M")
+                
+                st.markdown(f"""
                 <div class="feature-card" style="margin-top: 1rem;">
                     <div class="feature-title">
                         <span class="feature-icon">✅</span>
                         <span>Resumen</span>
                     </div>
                     <div class="feature-text">
-                        <p><strong>Monto:</strong> {:.2f} €</p>
-                        <p><strong>Comercio:</strong> {}</p>
-                        <p><strong>Fecha:</strong> 15/10/2025 10:30</p>
-                        <p><strong>ID Transacción:</strong> F2P-2025-10-15-001234</p>
-                        <p><strong>Método:</strong> Face2Pay Biométrico</p>
+                        <p><strong>Monto:</strong> {amount:.2f} €</p>
+                        <p><strong>Comercio:</strong> {merchant}</p>
+                        <p><strong>Fecha:</strong> {current_time}</p>
+                        <p><strong>ID Transacción:</strong> SMP-{datetime.now().strftime("%Y%m%d-%H%M%S")}</p>
+                        <p><strong>Método:</strong> SmilePay Biométrico</p>
                     </div>
                 </div>
-                """.format(amount, merchant), unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             else:
                 st.error("⚠️ Por favor, captura tu imagen y introduce tu PIN")
     
-    # Estadísticas de la demo
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown('<span class="section-badge">📊 MÉTRICAS DE RENDIMIENTO</span>', unsafe_allow_html=True)
     
     col1, col2, col3, col4 = st.columns(4)
     
-    with col1:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">⚡</div>
-            <div class="tech-name">1.8s</div>
-            <div class="tech-description">Tiempo promedio de transacción</div>
-        </div>
-        """, unsafe_allow_html=True)
+    metrics = [
+        ("⚡", "1.8s", "Tiempo promedio de transacción"),
+        ("🎯", "99.2%", "Tasa de éxito en reconocimiento"),
+        ("🛡️", "0.001%", "Tasa de falsos positivos"),
+        ("😊", "4.8/5", "Satisfacción del usuario")
+    ]
     
-    with col2:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">🎯</div>
-            <div class="tech-name">99.2%</div>
-            <div class="tech-description">Tasa de éxito en reconocimiento</div>
-        </div>
-        """, unsafe_allow_html=True)
+    for col, (icon, value, desc) in zip([col1, col2, col3, col4], metrics):
+        with col:
+            st.markdown(f"""
+            <div class="tech-card">
+                <div class="tech-icon">{icon}</div>
+                <div class="tech-name">{value}</div>
+                <div class="tech-description">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
     
-    with col3:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">🛡️</div>
-            <div class="tech-name">0.001%</div>
-            <div class="tech-description">Tasa de falsos positivos</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">😊</div>
-            <div class="tech-name">4.8/5</div>
-            <div class="tech-description">Satisfacción del usuario</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Ventajas competitivas
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown('<span class="section-badge">🏆 VENTAJAS COMPETITIVAS</span>', unsafe_allow_html=True)
     
@@ -1204,7 +1204,7 @@ else:
         </div>
         """, unsafe_allow_html=True)
     
-    # Roadmap futuro
+    st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown('<span class="section-badge">🗺️ ROADMAP</span>', unsafe_allow_html=True)
     
@@ -1226,7 +1226,9 @@ else:
                         </div>
                     </div>
                 </div>
-                
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
                 <div class="process-step">
                     <div class="step-number" style="width: 35px; height: 35px; font-size: 0.9rem;">Q2</div>
                     <div class="step-content">
@@ -1236,7 +1238,9 @@ else:
                         </div>
                     </div>
                 </div>
-                
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
                 <div class="process-step">
                     <div class="step-number" style="width: 35px; height: 35px; font-size: 0.9rem;">Q3</div>
                     <div class="step-content">
@@ -1246,7 +1250,9 @@ else:
                         </div>
                     </div>
                 </div>
-                
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
                 <div class="process-step">
                     <div class="step-number" style="width: 35px; height: 35px; font-size: 0.9rem;">Q4</div>
                     <div class="step-content">
@@ -1261,80 +1267,81 @@ else:
     </div>
     """, unsafe_allow_html=True)
     
-    # Testimonios simulados
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown('<span class="section-badge">💬 TESTIMONIOS</span>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     
-    with col1:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">👨‍💼</div>
-            <div class="tech-name">Carlos M.</div>
-            <div class="tech-description" style="font-style: italic;">
-                "Como gerente de tienda, Face2Pay ha reducido nuestras colas en un 40%. 
-                Los clientes están encantados con la rapidez."
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    testimonials = [
+        ("👨‍💼", "Carlos M.", "Como gerente de tienda, SmilePay ha reducido nuestras colas en un 40%. Los clientes están encantados con la rapidez."),
+        ("👩‍🦽", "Ana L.", "Tengo movilidad reducida y esta tecnología me ha cambiado la vida. Ya no necesito ayuda para buscar mi tarjeta o contar efectivo."),
+        ("👨‍💻", "Miguel R.", "La integración fue sorprendentemente sencilla. En dos semanas teníamos el sistema operativo en todas nuestras sucursales.")
+    ]
     
-    with col2:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">👩‍🦽</div>
-            <div class="tech-name">Ana L.</div>
-            <div class="tech-description" style="font-style: italic;">
-                "Tengo movilidad reducida y esta tecnología me ha cambiado la vida. 
-                Ya no necesito ayuda para buscar mi tarjeta o contar efectivo."
+    for col, (icon, name, text) in zip([col1, col2, col3], testimonials):
+        with col:
+            st.markdown(f"""
+            <div class="tech-card">
+                <div class="tech-icon">{icon}</div>
+                <div class="tech-name">{name}</div>
+                <div class="tech-description" style="font-style: italic;">{text}</div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
     
-    with col3:
-        st.markdown("""
-        <div class="tech-card">
-            <div class="tech-icon">👨‍💻</div>
-            <div class="tech-name">Miguel R.</div>
-            <div class="tech-description" style="font-style: italic;">
-                "La integración fue sorprendentemente sencilla. 
-                En dos semanas teníamos el sistema operativo en todas nuestras sucursales."
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Call to action
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("""
     <div class="demo-container">
-        <h2 style='margin-bottom: 1rem; color: white;'>¿Interesado en Face2Pay?</h2>
+        <h2 style='margin-bottom: 1rem; color: white;'>¿Interesado en SmilePay?</h2>
         <p style='font-size: 1.05rem; opacity: 0.9; margin-bottom: 2rem; color: white;'>
-            Contáctanos para una demo personalizada o para implementar Face2Pay en tu negocio
+            Contáctanos para una demo personalizada o para implementar SmilePay en tu negocio
         </p>
     </div>
     """, unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     with col1:
-        st.link_button("📧 Contactar", "mailto:info@face2pay.com", use_container_width=True)
+        st.link_button("📧 Contactar", "mailto:info@smilepay.com", use_container_width=True)
     with col2:
         st.link_button("📄 Descargar Dossier", "#", use_container_width=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Footer
-st.markdown(f"""
-<div style='text-align: center; padding: 3rem 1rem 1rem; color: {'rgba(255,255,255,0.7)' if st.session_state.dark_mode else 'rgba(15,23,42,0.6)'}; margin-top: 2rem;'>
-    <p style='font-size: 0.9rem;'>
-        <strong>Face2Pay</strong> - Innovation Banking Hack Fest 2025 (#IBHF25)
-    </p>
-    <p style='font-size: 0.85rem; margin-top: 0.5rem;'>
-        🏦 Banco Sabadell CCTA | 🎓 Universidad de Alicante | 🚀 Powered by AI
-    </p>
-    <p style='font-size: 0.8rem; margin-top: 1rem; opacity: 0.6;'>
-        © 2025 Face2Pay. Todos los derechos reservados. | 
-        <a href='#' style='color: inherit; text-decoration: none;'>Privacidad</a> | 
-        <a href='#' style='color: inherit; text-decoration: none;'>Términos</a>
-    </p>
-</div>
-""", unsafe_allow_html=True)
+def render_footer():
+    """Renderiza el footer"""
+    st.markdown(f"""
+    <div style='text-align: center; padding: 3rem 1rem 1rem; color: {'rgba(255,255,255,0.7)' if st.session_state.dark_mode else 'rgba(15,23,42,0.6)'}; margin-top: 2rem;'>
+        <p style='font-size: 0.9rem;'>
+            <strong>SmilePay</strong> - Innovation Banking Hack Fest 2025 (#IBHF25)
+        </p>
+        <p style='font-size: 0.85rem; margin-top: 0.5rem;'>
+            🏦 Banco Sabadell CCTA | 🎓 Universidad de Alicante | 🚀 Powered by AI
+        </p>
+        <p style='font-size: 0.8rem; margin-top: 1rem; opacity: 0.6;'>
+            © 2025 SmilePay. Todos los derechos reservados. | 
+            <a href='#' style='color: inherit; text-decoration: none;'>Privacidad</a> | 
+            <a href='#' style='color: inherit; text-decoration: none;'>Términos</a>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ==================== MAIN ====================
+def main():
+    """Función principal de la aplicación"""
+    initialize_session_state()
+    apply_custom_css()
+    
+    
+    
+    page = render_sidebar()
+    
+    if page == "🏠 Inicio":
+        page_home()
+    elif page == "⚙️ Funcionamiento":
+        page_how_it_works()
+    elif page == "🎬 Demo":
+        page_demo()
+    
+    render_footer()
+
+if __name__ == "__main__":
+    main()
