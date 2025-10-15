@@ -10,7 +10,7 @@ st.set_page_config(
     page_title="SmilePay - Pagos Biométricos",
     page_icon="😊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"  # Cambiado de "expanded" a "auto"
 )
 
 # ==================== ESTADO DE LA APLICACIÓN ====================
@@ -469,39 +469,100 @@ def apply_custom_css():
             box-shadow: 0 6px 25px var(--shadow-color);
         }}
         
-        /* Botones de navegación en sidebar */
-        section[data-testid="stSidebar"] .stButton > button {{
-            background: rgba(255, 255, 255, 0.15) !important;
+        /* Sidebar personalizado */
+        section[data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+        }}
+        
+        section[data-testid="stSidebar"] * {{
             color: white !important;
-            border: 2px solid rgba(255, 255, 255, 0.3) !important;
-            border-radius: 12px !important;
-            padding: 0.8rem 1rem !important;
-            font-weight: 600 !important;
-            font-size: 1rem !important;
+        }}
+        
+        /* Botón hamburguesa - SIEMPRE VISIBLE */
+        button[kind="header"] {{
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: var(--text-primary) !important;
+            background: var(--bg-card) !important;
+            border: 2px solid var(--border-color) !important;
+            border-radius: 8px !important;
+            padding: 0.5rem !important;
+            margin: 0.5rem !important;
+            box-shadow: 0 2px 8px var(--shadow-color) !important;
             transition: all 0.3s ease !important;
-            margin: 0.3rem 0 !important;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
         }}
         
-        section[data-testid="stSidebar"] .stButton > button:hover {{
-            background: rgba(255, 255, 255, 0.25) !important;
-            border-color: rgba(255, 255, 255, 0.6) !important;
-            transform: translateX(5px) !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+        button[kind="header"]:hover {{
+            background: var(--accent-color) !important;
+            color: white !important;
+            transform: scale(1.05) !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
         }}
         
-        section[data-testid="stSidebar"] .stButton > button[kind="primary"] {{
-            background: rgba(255, 255, 255, 0.95) !important;
-            color: #667eea !important;
-            border-color: white !important;
-            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.4) !important;
-            text-shadow: none !important;
+        /* Asegurar que el botón hamburguesa siempre sea visible */
+        [data-testid="collapsedControl"] {{
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: fixed !important;
+            top: 0.5rem !important;
+            left: 0.5rem !important;
+            z-index: 999999 !important;
+            background: var(--bg-card) !important;
+            border-radius: 8px !important;
+            padding: 0.25rem !important;
+            box-shadow: 0 4px 12px var(--shadow-color) !important;
         }}
         
-        section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{
-            background: white !important;
-            transform: translateX(5px) scale(1.02) !important;
-            box-shadow: 0 6px 25px rgba(255, 255, 255, 0.5) !important;
+        /* Sidebar colapsado */
+        [data-testid="stSidebar"][aria-expanded="false"] {{
+            display: none !important;
+        }}
+        
+        [data-testid="stSidebar"][aria-expanded="true"] {{
+            display: block !important;
+        }}
+        
+        /* Overlay cuando el sidebar está abierto en móvil */
+        @media (max-width: 768px) {{
+            [data-testid="stSidebar"]::before {{
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999;
+                display: none;
+            }}
+            
+            [data-testid="stSidebar"][aria-expanded="true"]::before {{
+                display: block;
+            }}
+            
+            [data-testid="stSidebar"] > div:first-child {{
+                position: fixed;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                width: 80vw;
+                max-width: 300px;
+                z-index: 1000;
+                box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
+            }}
+            
+            /* Botón de cerrar en móvil */
+            [data-testid="stSidebar"] button[kind="header"] {{
+                position: absolute;
+                top: 1rem;
+                right: 1rem;
+                z-index: 1001;
+                background: rgba(255, 255, 255, 0.2) !important;
+                color: white !important;
+                border: 2px solid rgba(255, 255, 255, 0.4) !important;
+            }}
         }}
         [data-testid="stMetricValue"] {{ color: var(--text-primary) !important; }}
         [data-testid="stMetricLabel"] {{ color: var(--text-secondary) !important; }}
