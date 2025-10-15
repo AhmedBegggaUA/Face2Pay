@@ -10,7 +10,7 @@ st.set_page_config(
     page_title="SmilePay - Pagos Biométricos",
     page_icon="😊",
     layout="wide",
-    initial_sidebar_state="auto"  # Cambiado de "expanded" a "auto"
+    initial_sidebar_state="expanded"
 )
 
 # ==================== ESTADO DE LA APLICACIÓN ====================
